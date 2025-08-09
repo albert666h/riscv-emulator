@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include "instruction_types.h"
 
 #define MEM_SIZE (1024 * 1024) // 1 MB
@@ -119,13 +120,37 @@ void execute(void *decoded_inst)
       {
         SType *s = (SType*) decoded_inst;
         // Handle S-type instructions (e.g. SW)
-        // store_word();
+        store_word(regs[s->rs1] + s->imm, regs[s->rs2]);
       }
+    default:
+      printf("Unknown opcode: %x\n", opcode);
+      break;
   }
+
+  pc += 4; // move to the next instruction
+
 }
 
 int main(int argc, char *argv[])
 {
   puts("RISC-V Enulator\n");
+
+  // Example program (addi x1, x0, 10)
+  memory[0] = 0x93; memory[1] = 0x00; memory[2] = 0xa0; memory[3] = 0x00; // ADDI
+
+  while (pc < MEM_SIZE) {
+    uint32_t inst = load_word(pc);
+    if(inst == 0) break; // halt condition
+
+    void *decoded_inst = malloc(sizeof(JType)); // Quick fix, biggest struct
+    
+    decode_instruction(inst, decoded_inst);
+    execute(decoded_inst);
+
+    free(decoded_inst);
+  }
+
+  printf("x1 = %d\n", regs[1]);
+
   return 0;
 }
