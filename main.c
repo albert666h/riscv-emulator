@@ -32,6 +32,11 @@ uint32_t fetch()
   return load_word(pc);
 }
 
+int32_t sign_extend(uint32_t val, int bits) {
+    int32_t m = 1u << (bits - 1);
+    return (val ^ m) - m;
+}
+
 void decode_instruction(uint32_t inst, void *decoded_inst)
 {
     uint32_t opcode = inst & 0x7f;  // The last 7 bits contain the opcode
@@ -53,7 +58,7 @@ void decode_instruction(uint32_t inst, void *decoded_inst)
         i->rd     = (inst >> 7) & 0x1f;
         i->funct3 = (inst >> 12) & 0x7;
         i->rs1    = (inst >> 15) & 0x1f;
-        i->imm    = (int32_t)(inst >> 20); // sign-extended
+        i->imm    = (inst >> 20);
     }
     // Handle S-type (opcode: 0x23)
     else if (opcode == 0x23) {
@@ -62,7 +67,8 @@ void decode_instruction(uint32_t inst, void *decoded_inst)
         s->funct3 = (inst >> 12) & 0x7;
         s->rs1    = (inst >> 15) & 0x1f;
         s->rs2    = (inst >> 20) & 0x1f;
-        s->imm    = ((inst >> 7) & 0x1f) | ((inst >> 25) & 0x7f); // split immediate
+        s->imm    = ((inst >> 7) & 0x1f) 
+                  | (((inst >> 25) & 0x7f) << 5);
     }
     // Handle B-type (opcode: 0x63)
     else if (opcode == 0x63) {
@@ -71,7 +77,10 @@ void decode_instruction(uint32_t inst, void *decoded_inst)
         b->funct3 = (inst >> 12) & 0x7;
         b->rs1    = (inst >> 15) & 0x1f;
         b->rs2    = (inst >> 20) & 0x1f;
-        b->imm    = ((inst >> 7) & 0x1f) | ((inst >> 25) & 0x3f); // split and sign-extend
+        b->imm    = ((inst >> 8) & 0xf) 
+                  | (((inst >> 25) & 0x3f) << 4)
+                  | (((inst >> 7) & 0x1) << 10)
+                  | ((inst >> 31) << 11);
     }
     // Handle U-type (opcode: 0x37, 0x17)
     else if (opcode == 0x37 || opcode == 0x17) {
@@ -85,7 +94,10 @@ void decode_instruction(uint32_t inst, void *decoded_inst)
         JType *j = (JType *)decoded_inst;
         j->opcode = opcode;
         j->rd     = (inst >> 7) & 0x1f;
-        j->imm    = ((inst >> 21) & 0x3ff) | ((inst >> 20) & 0x1) << 10 | ((inst >> 12) & 0xff) << 11; // J-type immediate
+        j->imm    = ((inst >> 21) & 0x3ff) 
+                  | ((inst >> 20) & 0x1) << 10 
+                  | ((inst >> 12) & 0xff) << 11
+                  | ((inst >> 31) << 19);
     }
     else {
         // Unrecognized opcode, handle error
@@ -112,7 +124,13 @@ void execute(void *decoded_inst)
         IType *i = (IType*) decoded_inst;
         // Handle I-type instructions (e.g. ADDI)
         if (i->funct3 == 0x0) { // ADDI
-          regs[i->rd] = regs[i->rs1] + i->imm;
+          regs[i->rd] = (int32_t)regs[i->rs1] + sign_extend(i->imm, 12);
+        } 
+        else if (i->funct3 == 0x2) { // SLTI
+          regs[i->rd] = regs[i->rs1] < sign_extend(i->imm, 12) ? 1 : 0;
+        }
+        else if (i->funct3 == 0x3) { // SLTIU
+          regs[i->rd] = regs[i->rs1] < i->imm ? 1 : 0;
         }
         break;
       }
@@ -120,7 +138,7 @@ void execute(void *decoded_inst)
       {
         SType *s = (SType*) decoded_inst;
         // Handle S-type instructions (e.g. SW)
-        store_word(regs[s->rs1] + s->imm, regs[s->rs2]);
+        store_word(regs[s->rs1] + sign_extend(s->imm, 12), regs[s->rs2]);
       }
     default:
       printf("Unknown opcode: %x\n", opcode);
@@ -128,6 +146,7 @@ void execute(void *decoded_inst)
   }
 
   pc += 4; // move to the next instruction
+  regs[REG_ZERO] = 0;
 
 }
 

@@ -2,6 +2,7 @@
 #define INSTRUCTION_TYPES_H
 
 #include <stdint.h>
+#include <stdio.h>
 
 // R-type: register-register arithmetic
 typedef struct {
@@ -19,7 +20,7 @@ typedef struct {
     uint32_t rd;
     uint32_t funct3;
     uint32_t rs1;
-    int32_t  imm; // sign-extended
+    uint32_t imm;
 } IType;
 
 // S-type: stores
@@ -28,7 +29,7 @@ typedef struct {
     uint32_t funct3;
     uint32_t rs1;
     uint32_t rs2;
-    int32_t  imm; // split + sign-extended
+    uint32_t imm;
 } SType;
 
 // B-type: conditional branches
@@ -37,22 +38,23 @@ typedef struct {
     uint32_t funct3;
     uint32_t rs1;
     uint32_t rs2;
-    int32_t  imm; // sign-extended branch offset
+    uint32_t imm;
 } BType;
 
 // U-type: upper immediate instructions
 typedef struct {
     uint32_t opcode;
     uint32_t rd;
-    int32_t  imm; // upper 20 bits shifted left by 12
+    uint32_t imm;
 } UType;
 
 // J-type: jump (JAL)
 typedef struct {
     uint32_t opcode;
     uint32_t rd;
-    int32_t  imm; // sign-extended jump offset
+    uint32_t imm;
 } JType;
+
 
 #endif // INSTRUCTION_TYPES_H
 
