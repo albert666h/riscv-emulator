@@ -99,10 +99,6 @@ void decode_instruction(uint32_t inst, void *decoded_inst)
                   | ((inst >> 12) & 0xff) << 11
                   | ((inst >> 31) << 19);
     }
-    else {
-        // Unrecognized opcode, handle error
-        printf("[-] Unknown opcode: 0x%02X\n", opcode);
-    }
 }
 
 void execute(void *decoded_inst)
@@ -117,45 +113,46 @@ void execute(void *decoded_inst)
         if (r->funct3 == 0x0) { // ADD/SUB
           if (r->funct7 == 0x0) {
             regs[r->rd] = regs[r->rs1] + regs[r->rs2];
-            puts("[*] Executed ADD");
+            printf("[*]\t ADD x%d, x%d, x%d\n", r->rd, r->rs1, r->rs2);
           }
           else if (r->funct7 == 0x20) {
             regs[r->rd] = regs[r->rs1] - regs[r->rs2];
-            puts("[*] Executed SUB");
+            printf("[*]\t SUB x%d, x%d, x%d\n", r->rd, r->rs1, r->rs2);
           }
         }
         else if (r->funct3 == 0x7) { // AND
           regs[r->rd] = regs[r->rs1] & regs[r->rs2];
-          puts("[*] Executed AND");
+          printf("[*]\t AND x%d, x%d, x%d\n", r->rd, r->rs1, r->rs2);
         }
         else if (r->funct3 == 0x6) { // OR
           regs[r->rd] = regs[r->rs1] | regs[r->rs2];
-          puts("[*] Executed OR");
+          printf("[*]\t OR x%d, x%d, x%d\n", r->rd, r->rs1, r->rs2);
         }
         else if (r->funct3 == 0x4) { // XOR
           regs[r->rd] = regs[r->rs1] ^ regs[r->rs2];
-          puts("[*] Executed XOR");
+          printf("[*]\t XOR x%d, x%d, x%d\n", r->rd, r->rs1, r->rs2);
         }
         else {
-          puts("[-] Unknown Instruction");
+          puts("[-]\t Unknown Instruction");
         }
         break;
       }
     case 0x13: // I-type
+    case 0x03:
       {
         IType *i = (IType*) decoded_inst;
         // Handle I-type instructions (e.g. ADDI)
         if (i->funct3 == 0x0) { // ADDI
           regs[i->rd] = (int32_t)regs[i->rs1] + sign_extend(i->imm, 12);
-          puts("[*] Executed ADDI");
+          printf("[*]\t ADDI x%d, x%d, %d\n", i->rd, i->rs1, sign_extend(i->imm, 12));
         } 
         else if (i->funct3 == 0x2) { // SLTI
           regs[i->rd] = regs[i->rs1] < sign_extend(i->imm, 12) ? 1 : 0;
-          puts("[*] Executed SLTI");
+          printf("[*]\t STLI x%d, x%d, %d\n", i->rd, i->rs1, sign_extend(i->imm, 12));
         }
         else if (i->funct3 == 0x3) { // SLTIU
           regs[i->rd] = regs[i->rs1] < i->imm ? 1 : 0;
-          puts("[*] Executed SLTIU");
+          printf("[*]\t ADDI x%d, x%d, %d\n", i->rd, i->rs1, i->imm);
         }
         break;
       }
@@ -165,8 +162,24 @@ void execute(void *decoded_inst)
         // Handle S-type instructions (e.g. SW)
         store_word(regs[s->rs1] + sign_extend(s->imm, 12), regs[s->rs2]);
       }
+    case 0x17: // U-type  (Since there's only two UType instructions I'll just separate them by opcode)
+      {
+        UType *u = (UType*) decoded_inst;
+        // Handle U-type instruction AUIPC
+        regs[u->rd] = pc + sign_extend(u->imm << 12, 32);
+        printf("[*]\t AUIPC x%d, %d\n", u->rd,  sign_extend(u->imm << 12, 32));
+        break;
+      }
+    case 0x37: // U-type
+      {
+        UType *u = (UType*) decoded_inst;
+        // Handle U-tyoe instruction LUI
+        regs[u->rd] = sign_extend(u->imm << 12, 32);
+        printf("[*]\t LUI x%d, %d\n", u->rd,  sign_extend(u->imm << 12, 32));
+        break;
+      }
     default:
-      printf("[-] Unknown opcode: %x\n", opcode);
+      printf("[-]\t Unknown opcode: %x\n", opcode);
       break;
   }
 
@@ -192,29 +205,26 @@ void* allocate_instruction(uint32_t opcode) {
         case 0x6f: // J-type (JAL)
             return malloc(sizeof(JType));
         default:
-            printf("[-] Unknown opcode: 0x%02X\n", opcode);
             return NULL;
     }
 }
 
 int main(int argc, char *argv[])
 {
-  puts("RISC-V Enulator\n");
+  puts("[*] RISC-V Enulator\n");
+  puts("[*] Instructions Executed:");
 
-  // Instructions to execute:
-  uint32_t program[] = {
-      0b00000000101000000000000010010011,  // addi x1, x0, 10
-      0b00000000111100000000000100010011,  // addi x2, x0, 15
-      0b00000000001000001000000110110011,  // add x3, x2, x1
-      0b01000000001000001000001000110011   // sub x4, x2, x1
+  uint32_t p[] = {
+    0x123450b7,
+    0x06789117
   };
 
   // Load the instructions into memory
-  for (int i = 0; i < 4; i++) {
-      memory[i * 4]     = program[i] & 0xFF;
-      memory[i * 4 + 1] = (program[i] >> 8) & 0xFF;
-      memory[i * 4 + 2] = (program[i] >> 16) & 0xFF;
-      memory[i * 4 + 3] = (program[i] >> 24) & 0xFF;
+  for (int i = 0; i < 2; i++) {
+      memory[i * 4]     = p[i] & 0xFF;
+      memory[i * 4 + 1] = (p[i] >> 8) & 0xFF;
+      memory[i * 4 + 2] = (p[i] >> 16) & 0xFF;
+      memory[i * 4 + 3] = (p[i] >> 24) & 0xFF;
   }
 
   while (pc < MEM_SIZE) {
